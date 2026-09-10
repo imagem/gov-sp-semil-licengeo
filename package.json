@@ -1,0 +1,34 @@
+{
+  "name": "semil-sp-demonstration",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "demoProject": "app",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "vite --config platform/vite.config.mjs",
+    "build": "vite build --config platform/vite.config.mjs",
+    "preview": "vite preview --config platform/vite.config.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arcgis/core": "5.1.21",
+    "@fontsource/inter": "5.3.0",
+    "@phosphor-icons/react": "2.1.10",
+    "@xyflow/react": "12.11.6",
+    "echarts": "6.1.0",
+    "pdf-lib": "1.17.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
