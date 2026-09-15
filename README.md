@@ -2,6 +2,9 @@
 
 Demonstracao de triagem ambiental assistida por IA para SEMIL-SP.
 
+![Detalhe do Centro de operações LicenGeo SP](pics/screenshot-1.png)
+![Detalhe de painel de Agentes, com atribuições e execução automática de subtarefas por agentes especialistas](pics/screenshot-2.png)
+
 ## Catalogo da demonstracao
 
 | Campo | Informacao |
