@@ -1,8 +1,9 @@
 import { ArrowRight, CheckCircle, Clock, FileMagnifyingGlass } from "@phosphor-icons/react";
 import { useState } from "react";
 import { pendingHumanWork, readyForIssuance } from "../../app/work-queues";
-import type { OperationProjection, PortfolioProjection } from "../../domain/model";
+import type { OperationProjection, PortfolioProjection, ProcessExecutionProjection } from "../../domain/model";
 import { PanelFrame } from "../shell/PanelFrame";
+import { resolveHumanWorkProcessId, type HumanWorkTab } from "./human-work-selection";
 import { ProcessOwnership } from "./ProcessOwnership";
 
 interface HumanWorkPanelProps {
@@ -10,22 +11,24 @@ interface HumanWorkPanelProps {
   readonly portfolio: PortfolioProjection;
   readonly collapsed: boolean;
   readonly onToggle: () => void;
-  readonly onResolve: () => void;
-  readonly onRequestComplement: () => void;
+  readonly onResolve: (processId: string) => void;
+  readonly onRequestComplement: (processId: string) => void;
   readonly onOpenDossier: () => void;
   readonly onOpenProcesses: () => void;
   readonly onSelectProcess: (processId: string) => void;
+  readonly selectedPendingProcessId: string | null;
 }
 
-export function HumanWorkPanel({ projection, portfolio, collapsed, onToggle, onResolve, onRequestComplement, onOpenDossier, onOpenProcesses, onSelectProcess }: HumanWorkPanelProps) {
-  const [tab, setTab] = useState("pending");
+export function HumanWorkPanel({ projection, portfolio, collapsed, onToggle, onResolve, onRequestComplement, onOpenDossier, onOpenProcesses, onSelectProcess, selectedPendingProcessId }: HumanWorkPanelProps) {
+  const [tab, setTab] = useState<HumanWorkTab>("pending");
   const groups = [
     { id: "pending", label: "Pendências", items: portfolio.processes.filter(pendingHumanWork) },
     { id: "decisions", label: "Decisões", items: portfolio.processes.filter((process) => process.events.some((event) => event.kind === "human-decision-recorded")) },
     { id: "issuance", label: "Emissão", items: portfolio.processes.filter(readyForIssuance) },
-  ];
+  ] satisfies readonly { readonly id: HumanWorkTab; readonly label: string; readonly items: readonly ProcessExecutionProjection[] }[];
   const group = groups.find((item) => item.id === tab) ?? groups[0];
-  const selected = group?.items.find((item) => item.scenario.id === projection.scenario.id);
+  const selectedProcessId = resolveHumanWorkProcessId(tab, selectedPendingProcessId, projection.scenario.id);
+  const selected = group?.items.find((item) => item.scenario.id === selectedProcessId);
   return <PanelFrame className="human-work-panel" title="Trabalho humano" collapsed={collapsed} onToggle={onToggle}>
     <div className="work-tabs" role="tablist" aria-label="Tipos de trabalho humano">
       {groups.map((item) => <button type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? "work-tab work-tab--selected" : "work-tab"} key={item.id} onClick={() => setTab(item.id)}>{item.label} <span>{item.items.length}</span></button>)}
@@ -37,7 +40,7 @@ export function HumanWorkPanel({ projection, portfolio, collapsed, onToggle, onR
     {selected ? <div className="selected-work"><h3>{selected.scenario.id}</h3><p>{selected.scenario.title}</p>
       <ProcessOwnership process={selected} portfolio={portfolio} />
       <section className="human-evidence-summary"><h4>Evidências registradas</h4>{selected.evidence.map((evidence) => <p key={evidence.id}><strong>{evidence.title}: {evidence.measure}</strong><br />{evidence.detail}</p>)}</section>
-      <div className="action-row">{tab === "pending" ? <><button className="button button--primary" type="button" onClick={onResolve}><CheckCircle /> Revisar decisão</button><button className="button button--secondary" type="button" onClick={onRequestComplement}><Clock /> Complemento</button></> : <button className="button button--primary" type="button" onClick={onOpenDossier}><FileMagnifyingGlass /> Abrir dossiê</button>}</div>
+      <div className="action-row">{tab === "pending" ? <><button className="button button--primary" type="button" onClick={() => onResolve(selected.scenario.id)}><CheckCircle /> Revisar decisão</button><button className="button button--secondary" type="button" onClick={() => onRequestComplement(selected.scenario.id)}><Clock /> Complemento</button></> : <button className="button button--primary" type="button" onClick={onOpenDossier}><FileMagnifyingGlass /> Abrir dossiê</button>}</div>
     </div> : null}
     <button className="text-action" type="button" onClick={onOpenProcesses}>Ver todos os processos <ArrowRight /></button>
   </PanelFrame>;

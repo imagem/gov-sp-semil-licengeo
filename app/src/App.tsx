@@ -65,7 +65,9 @@ export default function App() {
   const [enabledRules, setEnabledRules] = useState<Readonly<Record<TriageRule["id"], boolean>>>(INITIAL_RULE_STATES);
   const [ruleConfigurations, setRuleConfigurations] = useState<Readonly<Record<TriageRule["id"], RuleConfiguration>>>(DEFAULT_RULE_CONFIGURATIONS);
   const [selectedStage, setSelectedStage] = useState<AgentStage>("territorial-analysis");
+  const [selectedPendingProcessId, setSelectedPendingProcessId] = useState<string | null>(null);
   const [decisionOpen, setDecisionOpen] = useState(false);
+  const [decisionProcessId, setDecisionProcessId] = useState<string | null>(null);
   const [decisionKind, setDecisionKind] = useState<HumanDecisionCommand["kind"]>("approve-recommendation");
   const [dossierOpen, setDossierOpen] = useState(false);
   const [ruleDetailsOpen, setRuleDetailsOpen] = useState(false);
@@ -81,6 +83,12 @@ export default function App() {
     setSelectedRule(layer === "none" ? "score" : layer);
     setMapFocus("process");
   }, [scenario.projection.scenario]);
+
+  useEffect(() => {
+    if (!panels.human || activeNavigation !== "operation") {
+      setSelectedPendingProcessId(null);
+    }
+  }, [activeNavigation, panels.human]);
 
   function togglePanel(id: PanelId) {
     if (id === "agents") setCatalogOpen(false);
@@ -129,10 +137,20 @@ export default function App() {
     setToast(`${evidence.title} localizada no mapa.`);
   }
 
-  function openDecision(kind: HumanDecisionCommand["kind"]) {
+  function selectPendingProcess(processId: string) {
+    setSelectedPendingProcessId(processId);
+    scenario.selectProcess(processId);
+  }
+
+  function openDecision(kind: HumanDecisionCommand["kind"], processId?: string) {
     setDecisionKind(kind);
+    setDecisionProcessId(processId ?? null);
     setDecisionOpen(true);
   }
+
+  const decisionProcess = scenario.portfolio.processes.find(
+    (process) => process.scenario.id === (decisionProcessId ?? scenario.projection.scenario.id),
+  );
 
   return (
     <div className={["app", darkTheme ? "app--dark" : "", sidebarCollapsed ? "app--nav-collapsed" : ""].filter(Boolean).join(" ")}>
@@ -168,11 +186,12 @@ export default function App() {
             portfolio={scenario.portfolio}
             collapsed={false}
             onToggle={() => togglePanel("human")}
-            onResolve={() => openDecision("approve-recommendation")}
-            onRequestComplement={() => openDecision("request-complement")}
+            onResolve={(processId) => openDecision("approve-recommendation", processId)}
+            onRequestComplement={(processId) => openDecision("request-complement", processId)}
             onOpenDossier={() => setDossierOpen(true)}
             onOpenProcesses={() => setActiveNavigation("processes")}
-            onSelectProcess={scenario.selectProcess}
+            onSelectProcess={selectPendingProcess}
+            selectedPendingProcessId={selectedPendingProcessId}
           /> : null}
           {panels.rules ? <RulesPanel
             collapsed={false}
@@ -220,17 +239,19 @@ export default function App() {
         {notificationsOpen ? (
           <aside className="notifications-popover" aria-label="Notificações">
             <header><strong>Notificações</strong><button className="icon-button icon-button--small" type="button" aria-label="Fechar notificações" onClick={() => setNotificationsOpen(false)}><X /></button></header>
-            {pendingProcesses.map((process) => <button type="button" key={process.scenario.id} onClick={() => { scenario.selectProcess(process.scenario.id); setActiveNavigation("operation"); setNotificationsOpen(false); setAssistantOpen(false); setPanels((current) => ({ ...current, human: true, rules: false, inspector: false })); }}><WarningCircle /><span><strong>Decisão humana necessária</strong><small>{process.scenario.id} · {process.scenario.municipality}</small></span></button>)}
+            {pendingProcesses.map((process) => <button type="button" key={process.scenario.id} onClick={() => { selectPendingProcess(process.scenario.id); setActiveNavigation("operation"); setNotificationsOpen(false); setAssistantOpen(false); setPanels((current) => ({ ...current, human: true, rules: false, inspector: false })); }}><WarningCircle /><span><strong>Decisão humana necessária</strong><small>{process.scenario.id} · {process.scenario.municipality}</small></span></button>)}
             {!pendingProcesses.length ? <p className="work-empty">Nenhuma solicitação humana pendente.</p> : null}
           </aside>
         ) : null}
-      <DecisionDialog
+      {decisionProcess ? <DecisionDialog
         open={decisionOpen}
         initialKind={decisionKind}
-        projection={scenario.projection}
+        process={decisionProcess}
         onClose={() => setDecisionOpen(false)}
-        onDecision={scenario.decide}
-      />
+        onDecision={(command) => decisionProcessId
+          ? scenario.decideFor(decisionProcessId, command)
+          : scenario.decide(command)}
+      /> : null}
       <DossierDialog
         open={dossierOpen}
         projection={scenario.projection}

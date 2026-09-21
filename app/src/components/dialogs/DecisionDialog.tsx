@@ -2,19 +2,19 @@ import { CheckCircle, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import type { HumanDecisionCommand, OperationProjection } from "../../domain/model";
+import type { HumanDecisionCommand, ProcessExecutionProjection } from "../../domain/model";
 
 type DecisionKind = HumanDecisionCommand["kind"];
 
 interface DecisionDialogProps {
   readonly open: boolean;
   readonly initialKind: DecisionKind;
-  readonly projection: OperationProjection;
+  readonly process: ProcessExecutionProjection;
   readonly onClose: () => void;
   readonly onDecision: (command: HumanDecisionCommand) => void;
 }
 
-export function DecisionDialog({ open, initialKind, projection, onClose, onDecision }: DecisionDialogProps) {
+export function DecisionDialog({ open, initialKind, process, onClose, onDecision }: DecisionDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [kind, setKind] = useState<DecisionKind>("approve-recommendation");
   const [justification, setJustification] = useState("");
@@ -50,7 +50,7 @@ export function DecisionDialog({ open, initialKind, projection, onClose, onDecis
       <form method="dialog" onSubmit={submit}>
         <header>
           <div>
-            <span>{projection.scenario.id}</span>
+            <span>{process.scenario.id}</span>
             <h2>Resolver pendência</h2>
             <p>Compare a recomendação com as evidências antes de registrar a decisão.</p>
           </div>
@@ -62,15 +62,15 @@ export function DecisionDialog({ open, initialKind, projection, onClose, onDecis
         <section className="decision-evidence">
           <div>
             <span>Recomendação original</span>
-            <strong>{projection.scenario.recommendation.route}</strong>
+            <strong>{process.scenario.recommendation.route}</strong>
           </div>
           <div>
             <span>Score simulado</span>
-            <strong>{projection.scenario.recommendation.score}/100</strong>
+            <strong>{process.scenario.recommendation.score}/100</strong>
           </div>
           <div>
             <span>Resultado territorial</span>
-            <strong>{projection.scenario.conflict?.summary ?? projection.scenario.evidence[0]?.detail ?? "Sem conflito territorial"}</strong>
+            <strong>{process.scenario.conflict?.summary ?? process.scenario.evidence[0]?.detail ?? "Sem conflito territorial"}</strong>
           </div>
         </section>
 
