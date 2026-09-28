@@ -4,6 +4,7 @@ import {
   Moon,
   Sun,
 } from "@phosphor-icons/react";
+import { useEffect, useState } from "react";
 
 interface AppHeaderProps {
   readonly notificationCount: number;
@@ -22,6 +23,13 @@ export function AppHeader({
   onToggleNotifications,
   notificationCount,
 }: AppHeaderProps) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <header className="app-header">
       <div className="brand-lockup">
@@ -34,7 +42,7 @@ export function AppHeader({
           <h1>{title}</h1>
       </div>
 
-      <time className="app-header__clock" dateTime={clock}>{formatClock(clock)}</time>
+      <time className="app-header__clock" dateTime={now.toISOString()}>{formatClock(now)}</time>
 
       <div className="app-header__actions">
         <span className="simulation-disclosure">
@@ -70,7 +78,7 @@ export function AppHeader({
   );
 }
 
-function formatClock(value: string) {
+function formatClock(value: Date) {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "short",
@@ -78,6 +86,6 @@ function formatClock(value: string) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(value)).replace(",", " ·");
+    timeZone: "America/Sao_Paulo",
+  }).format(value).replace(",", " ·");
 }

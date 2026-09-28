@@ -1681,7 +1681,7 @@ dialog::backdrop {
 }
 
 @media (max-width: 1180px) {
-  .app-header { padding-left: calc(var(--sidebar-width) + var(--space-2)); }
+  .app-header { padding-left: var(--space-3); }
   .simulation-disclosure,
   .profile-button__copy { display: none; }
   .scenario-toolbar { right: 336px; grid-template-columns: minmax(190px, 1fr) auto auto; }
@@ -5266,7 +5266,7 @@ dialog::backdrop {
 }
 
 .app-header {
-  padding-left: calc(var(--sidebar-width) + var(--space-4));
+  padding-left: var(--space-4);
   transition: padding-left 180ms ease;
 }
 
