@@ -66,6 +66,7 @@ export default function App() {
   const [ruleConfigurations, setRuleConfigurations] = useState<Readonly<Record<TriageRule["id"], RuleConfiguration>>>(DEFAULT_RULE_CONFIGURATIONS);
   const [selectedStage, setSelectedStage] = useState<AgentStage>("territorial-analysis");
   const [selectedPendingProcessId, setSelectedPendingProcessId] = useState<string | null>(null);
+  const [popupProcessId, setPopupProcessId] = useState<string | null>(null);
   const [decisionOpen, setDecisionOpen] = useState(false);
   const [decisionProcessId, setDecisionProcessId] = useState<string | null>(null);
   const [decisionKind, setDecisionKind] = useState<HumanDecisionCommand["kind"]>("approve-recommendation");
@@ -139,11 +140,13 @@ export default function App() {
 
   function selectPendingProcess(processId: string) {
     setSelectedPendingProcessId(processId);
+    setPopupProcessId(processId);
     scenario.pinProcess(processId);
   }
 
   function releasePendingFocus() {
     setSelectedPendingProcessId(null);
+    setPopupProcessId(null);
     scenario.releaseProcess();
   }
 
@@ -175,7 +178,7 @@ export default function App() {
       <Sidebar active={activeNavigation} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} onNavigate={setActiveNavigation} />
 
       {activeNavigation === "operation" ? <main className="operation-page">
-        <OperationMap focus={mapFocus} scenario={scenario.projection.scenario} stage={scenario.projection.currentStage} pinnedProcessId={scenario.pinnedProcessId} pendingProcesses={pendingProcesses} catalogOpen={catalogOpen} onCatalogChange={(open) => { setCatalogOpen(open); if (open) setPanels((current) => ({ ...current, agents: false })); }} />
+        <OperationMap focus={mapFocus} scenario={scenario.projection.scenario} stage={scenario.projection.currentStage} pinnedProcessId={scenario.pinnedProcessId} pendingProcesses={pendingProcesses} popupProcessId={popupProcessId} onClosePopup={() => setPopupProcessId(null)} onSelectPending={selectPendingProcess} catalogOpen={catalogOpen} onCatalogChange={(open) => { setCatalogOpen(open); if (open) setPanels((current) => ({ ...current, agents: false })); }} />
         <div className={focusMode ? "operation-overlay operation-overlay--focus" : "operation-overlay"}>
           <ScenarioToolbar
             projection={scenario.projection}

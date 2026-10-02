@@ -21,6 +21,8 @@ import type { ReactNode } from "react";
 import { OPERATION_SCENARIOS } from "../../app/operation-scenarios";
 import type { AgentStage, EnvironmentalLayerId, OperationScenario, ProcessExecutionProjection } from "../../domain/model";
 import { pendingMarkerSpecs } from "./pending-markers";
+import { PendingMapPopup } from "./PendingMapPopup";
+import { EVIDENCE_ALERT_COLOR, EVIDENCE_CLEAR_COLOR, pendingMapLegend, PROCESS_HIGH_COLOR, PROCESS_LOW_COLOR } from "./map-analysis-legend";
 
 type LayerId = Exclude<EnvironmentalLayerId, "none"> | "processes";
 export type MapFocus = "overview" | "process" | LayerId;
@@ -33,6 +35,9 @@ interface OperationMapProps {
   readonly stage: AgentStage;
   readonly pinnedProcessId: string | null;
   readonly pendingProcesses: readonly ProcessExecutionProjection[];
+  readonly popupProcessId: string | null;
+  readonly onClosePopup: () => void;
+  readonly onSelectPending: (processId: string) => void;
 }
 
 interface LayerRegistry {
@@ -79,17 +84,23 @@ const DEFAULT_VISIBILITY: Readonly<Record<LayerId, boolean>> = {
   terrasIndigenas: true,
 };
 
-export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingProcesses, catalogOpen, onCatalogChange: setCatalogOpen }: OperationMapProps) {
+export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingProcesses, popupProcessId, onClosePopup, onSelectPending, catalogOpen, onCatalogChange: setCatalogOpen }: OperationMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const mapRef = useRef<ArcGISMap | null>(null);
   const layersRef = useRef<LayerRegistry | null>(null);
+  const pendingIdsRef = useRef(new Set(pendingProcesses.map((process) => process.scenario.id)));
+  const selectPendingRef = useRef(onSelectPending);
   const previousScenarioId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [catalogTab, setCatalogTab] = useState<"layers" | "basemaps">("layers");
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
   const [basemap, setBasemap] = useState("hybrid");
   const [featureCounts, setFeatureCounts] = useState<Partial<Record<LayerId, number>>>({ processes: OPERATION_SCENARIOS.length, app: 1 });
+  const popupProcess = pendingProcesses.find((process) => process.scenario.id === popupProcessId);
+  const popupFocusLayer = LAYERS.find((layer) => layer.id === popupProcess?.scenario.focusLayer);
+  pendingIdsRef.current = new Set(pendingProcesses.map((process) => process.scenario.id));
+  selectPendingRef.current = onSelectPending;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -105,7 +116,7 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
       center: [-48.50, -22.60],
       zoom: 7,
       constraints: { snapToZoom: false, minZoom: 6, maxZoom: 18 },
-      popupEnabled: true,
+      popupEnabled: false,
     });
     view.set("map", map);
 
@@ -117,6 +128,12 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
     view.ui.remove("zoom");
     const extentWatch = view.watch("extent", () => syncMapOverlays(view, container.parentElement));
     const sizeWatch = view.watch("size", () => syncMapOverlays(view, container.parentElement));
+    const clickHandle = view.on("click", (event) => {
+      void view.hitTest(event, { include: [registry.processes, registry.activeProcess] }).then(({ results }) => {
+        const result = results.find((candidate) => candidate.type === "graphic" && pendingIdsRef.current.has(String(candidate.graphic.attributes.id)));
+        if (result?.type === "graphic") selectPendingRef.current(String(result.graphic.attributes.id));
+      }).catch(() => undefined);
+    });
     void view.when().then(() => syncMapOverlays(view, container.parentElement));
 
     void view.when().then(async () => {
@@ -136,6 +153,7 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
       layersRef.current = null;
       extentWatch.remove();
       sizeWatch.remove();
+      clickHandle.remove();
       view.destroy();
     };
   }, []);
@@ -208,6 +226,28 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
     void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: 0 }).catch(() => undefined);
   }, [pinnedProcessId, scenario]);
 
+  useEffect(() => {
+    const view = viewRef.current;
+    const region = containerRef.current?.parentElement;
+    if (!view || !region) return;
+    let cancelled = false;
+    const positionMap = () => {
+      const popup = region.querySelector<HTMLElement>(".pending-map-popup");
+      const left = popup ? Math.ceil(popup.getBoundingClientRect().width + 24) : 0;
+      const right = popup && region.clientWidth > 900 ? Math.min(430, Math.max(0, region.clientWidth - left - 300)) : 0;
+      view.padding = { left, right, top: 0, bottom: 0 };
+      if (popup && popupProcessId === scenario.id) {
+        void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: prefersReducedMotion() ? 0 : 450 }).catch(() => undefined);
+      } else if (!popup && pinnedProcessId === scenario.id) {
+        void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: 0 }).catch(() => undefined);
+      }
+    };
+    const observer = new ResizeObserver(() => { if (!cancelled) positionMap(); });
+    observer.observe(region);
+    void view.when().then(() => { if (!cancelled) positionMap(); }).catch(() => undefined);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [popupProcessId, pinnedProcessId, scenario]);
+
   function toggleLayer(id: LayerId) {
     const layer = layersRef.current?.[id];
     if (!layer) return;
@@ -224,11 +264,11 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
   }
 
   return (
-    <div className="map-region" aria-label="Mapa do processo e das evidências territoriais" data-process-id={scenario.id}>
+    <div className={popupProcess ? "map-region map-region--popup" : "map-region"} aria-label="Mapa do processo e das evidências territoriais" data-process-id={scenario.id}>
       <div className="map-view" ref={containerRef} />
       <svg className="map-process-overlay" aria-hidden="true"><polygon data-process-outline={scenario.id} data-coordinates={JSON.stringify(scenario.polygon)} /></svg>
-      <div className="map-pending-overlays" aria-hidden="true">{pendingMarkerSpecs(pendingProcesses).map((marker) => <span className="map-pending-marker" data-longitude={marker.center[0]} data-latitude={marker.center[1]} key={marker.id} title={`${marker.id}: ${marker.label}`}>!</span>)}</div>
-      <ul className="sr-only" aria-label="Pendências no mapa">{pendingMarkerSpecs(pendingProcesses).map((marker) => <li key={marker.id}>{marker.label}</li>)}</ul>
+      <div className="map-pending-overlays">{pendingMarkerSpecs(pendingProcesses).map((marker) => <button type="button" className="map-pending-marker" data-longitude={marker.center[0]} data-latitude={marker.center[1]} key={marker.id} title={`${marker.id}: ${marker.label}`} aria-label={`Abrir ${marker.label}`} onClick={() => onSelectPending(marker.id)}>!</button>)}</div>
+      {popupProcess ? <PendingMapPopup process={popupProcess} legend={pendingMapLegend(popupProcess.scenario, popupFocusLayer, popupFocusLayer ? visibility[popupFocusLayer.id] : false)} onClose={onClosePopup} /> : null}
       {error ? <div className="map-error" role="alert">{error}</div> : null}
       <div className="map-tools" aria-label="Ferramentas do mapa">
         <button type="button" aria-label="Visão estadual" onClick={() => moveHome(viewRef.current)}><House /></button>
@@ -320,15 +360,6 @@ function createGeoJsonLayer(url: string, title: string, fill: number[], outline:
       type: "simple",
       symbol: { type: "simple-fill", color: fill, outline: { color: outline, width: 1.2 } },
     },
-    popupTemplate: {
-      title: `{nome}`,
-      content: [{ type: "fields", fieldInfos: [
-        { fieldName: "categoria", label: "Categoria" },
-        { fieldName: "fase", label: "Fase" },
-        { fieldName: "municipios", label: "Municípios" },
-        { fieldName: "orgao_gestor", label: "Órgão gestor" },
-      ] }],
-    },
   });
 }
 
@@ -339,7 +370,6 @@ function createProcessCatalogGraphics(): Graphic[] {
       geometry: polygon,
       attributes: { id: scenario.id, title: scenario.title, municipality: scenario.municipality },
       symbol: { type: "simple-fill", color: [114, 87, 255, 0.08], outline: { color: [114, 87, 255, 0.72], width: 1.2 } },
-      popupTemplate: { title: "{id}", content: "{title}<br>{municipality}<br>Dados simulados" },
     })];
   });
 }
@@ -350,19 +380,17 @@ function createAppGraphic(): Graphic {
     geometry: new Polygon({ rings: [ring], spatialReference: { wkid: 4326 } }),
     attributes: { name: "APP hídrica simulada", source: "Geometria sintética" },
     symbol: { type: "simple-fill", color: [47, 128, 237, 0.18], outline: { color: [47, 128, 237, 0.95], width: 1.5 } },
-    popupTemplate: { title: "{name}", content: "{source}" },
   });
 }
 
 function createActiveProcessGraphics(scenario: OperationScenario, polygon: Polygon): Graphic[] {
   const high = scenario.recommendation.score >= 35;
-  const color = high ? [220, 38, 38] : [16, 185, 129];
+  const color = high ? PROCESS_HIGH_COLOR : PROCESS_LOW_COLOR;
   return [
     new Graphic({
       geometry: polygon,
       attributes: { id: scenario.id, title: scenario.title, municipality: scenario.municipality },
       symbol: { type: "simple-fill", color: [...color, 0.24], outline: { color: [...color, 1], width: 2.5 } },
-      popupTemplate: { title: "{id}", content: "{title}<br>{municipality}<br>Processo simulado em análise" },
     }),
     new Graphic({
       geometry: { type: "point", longitude: scenario.center[0], latitude: scenario.center[1], spatialReference: { wkid: 4326 } },
@@ -374,15 +402,15 @@ function createActiveProcessGraphics(scenario: OperationScenario, polygon: Polyg
 
 function createEvidenceGraphic(scenario: OperationScenario, polygon: Polygon): Graphic {
   const clear = scenario.focusLayer === "none";
+  const color = clear ? EVIDENCE_CLEAR_COLOR : EVIDENCE_ALERT_COLOR;
   return new Graphic({
     geometry: extentOrPolygon(polygon, 1.6),
     attributes: { process: scenario.id, result: scenario.focusLayerLabel },
     symbol: {
       type: "simple-fill",
-      color: clear ? [16, 185, 129, 0.04] : [245, 158, 11, 0.08],
-      outline: { color: clear ? [16, 185, 129, 0.9] : [245, 158, 11, 0.95], width: 2, style: "dash" },
+      color: [...color, clear ? 0.04 : 0.08],
+      outline: { color: [...color, clear ? 0.9 : 0.95], width: 2, style: "dash" },
     },
-    popupTemplate: { title: "Evidência territorial", content: "{result}<br>{process}" },
   });
 }
 
