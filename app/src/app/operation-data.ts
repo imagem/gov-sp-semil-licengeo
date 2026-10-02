@@ -74,7 +74,7 @@ export const DEFAULT_TRIAGE_RULE: TriageRule = {
   code: "R-01",
   title: "APP hídrica > 0 ha",
   layers: "Hidrografia + APP 30 m",
-  result: "Sobreposição 2,18 ha",
+    result: "Sobreposição cartográfica simulada",
   version: "v2026.08",
   tone: "selected",
 };

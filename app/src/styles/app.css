@@ -6754,6 +6754,42 @@ meter { accent-color: var(--color-primary); }
 .inspector-phase small { color: var(--color-ink-muted); font-size: 11px; }
 .agent-flow__legend { grid-column: 1 / -1; margin: 0 0 5px; font-size: 12px; font-weight: 700; }
 .agent-node__copy small, .agent-node__copy strong, .agent-node__copy span, .agent-specification, .agent-io-grid, .event-row { font-size: 11px; }
+.agent-node__copy { align-content: center; }
+.agent-node__copy strong { line-height: 1.15; }
+.agent-node__copy > span { line-height: 1.1; }
+.kpi-item { position: relative; border-radius: 4px; }
+.kpi-item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; }
+.kpi-item__tooltip {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 16%);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+}
+.kpi-item:first-child .kpi-item__tooltip { left: 0; transform: translate(0, 4px); }
+.kpi-item:last-child .kpi-item__tooltip { right: 0; left: auto; transform: translate(0, 4px); }
+.kpi-item:hover .kpi-item__tooltip,
+.kpi-item:focus-visible .kpi-item__tooltip { opacity: 1; transform: translate(-50%, 0); visibility: visible; }
+.kpi-item:first-child:hover .kpi-item__tooltip,
+.kpi-item:first-child:focus-visible .kpi-item__tooltip,
+.kpi-item:last-child:hover .kpi-item__tooltip,
+.kpi-item:last-child:focus-visible .kpi-item__tooltip { transform: translate(0, 0); }
 .event-row__author { display: block; margin-top: 3px; color: var(--color-ink-muted); font-size: 11px; }
 .specialist-department-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; font-size: 12px; }
 .department-tone { padding: 4px 8px; border-radius: 4px; border-left: 4px solid; background: var(--color-surface-soft); }

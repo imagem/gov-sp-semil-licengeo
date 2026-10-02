@@ -6,16 +6,16 @@ import { pendingExplanation, eventAttribution, processTraceSteps } from "../app/
 const rules = [{ id: "ucUs", code: "R-03", title: "Interseção com UC de Uso Sustentável" }, { id: "humanReview", code: "R-HUM", title: "Revisão humana ao fim da triagem" }];
 const specialists = [{ id: "ESP-07", name: "UC de Uso Sustentável e amortecimento" }, { id: "ESP-11", name: "Biodiversidade, fauna e conectividade" }];
 const scenario = { id: "PROC-2026-0514", focusLayer: "ucUs", recommendation: { route: "Revisão técnica orientada" } };
-const evidence = { title: "UC de Uso Sustentável", measure: "0,36 ha", detail: "Interferência na APA Itupararanga" };
+const evidence = { title: "UC de Uso Sustentável", measure: "aprox. 130 ha", detail: "Interferência na APA Itupararanga" };
 
 test("pending explanation only names specialists requested in the diary", () => {
   const process = { scenario, evidence: [evidence], events: [
-    { kind: "specialist-requested", specialistId: "ESP-07", trigger: "Interseção de 0,36 ha com APA Itupararanga", title: "Análise da APA" },
+    { kind: "specialist-requested", specialistId: "ESP-07", trigger: "Interseção com APA Itupararanga", title: "Análise da APA" },
     { kind: "human-decision-requested" },
   ] };
   const result = pendingExplanation(process as never, rules as never, specialists as never);
   assert.equal(result.ruleCode, "R-03");
-  assert.match(result.evidence, /0,36 ha/);
+  assert.match(result.evidence, /130 ha/);
   assert.deepEqual(result.specialists.map((item) => item.id), ["ESP-07"]);
 });
 
@@ -34,7 +34,7 @@ test("the visual chain does not publish a decision before it is recorded", () =>
   const steps = processTraceSteps(process as never, rules as never, specialists as never);
   assert.equal(steps.at(-1)?.label, "Decisão humana");
   assert.equal(steps.at(-1)?.value, "Ainda não registrado");
-  assert.match(steps[1]?.value ?? "", /0,36 ha/);
+  assert.match(steps[1]?.value ?? "", /130 ha/);
 });
 
 test("a restarted triage does not show specialists from the previous cycle", () => {
@@ -51,4 +51,15 @@ test("non-spatial evidence does not claim a territorial intersection", () => {
   const result = pendingExplanation(process as never, rules as never, specialists as never);
   assert.match(result.reason, /fonte e a documentação/);
   assert.doesNotMatch(result.reason, /interseção/);
+});
+
+test("a clear territorial scan explains routine review without claiming an intersection", () => {
+  const process = {
+    scenario: { ...scenario, focusLayer: "none", conflict: null, recommendation: { score: 12, route: "Triagem simples" } },
+    evidence: [{ kind: "attribute-divergence", title: "Bateria territorial", measure: "0 conflito", detail: "Nenhuma sobreposição" }],
+    events: [{ kind: "human-decision-requested" }],
+  };
+  const result = pendingExplanation(process as never, rules as never, specialists as never);
+  assert.match(result.reason, /não indicam sobreposição/);
+  assert.doesNotMatch(result.reason, /alerta/);
 });

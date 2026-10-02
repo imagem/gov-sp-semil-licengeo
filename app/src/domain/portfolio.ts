@@ -190,7 +190,9 @@ export function advancePortfolio(state: PortfolioState): PortfolioState {
 }
 
 export function projectPortfolio(state: PortfolioState): PortfolioProjection {
-  const processes = OPERATION_SCENARIOS.map((scenario) => projectProcess(state.events, scenario.id));
+  const processes = OPERATION_SCENARIOS
+    .filter((scenario) => scenario.arrivalTick <= state.tick)
+    .map((scenario) => projectProcess(state.events, scenario.id));
   const queuedProcesses = processes.filter((process) => process.status === "queued");
   const activeProcesses = processes.filter((process) => process.status === "in-analysis" && workflowFor(process).missing.length === 0);
   const completedProcesses = processes.filter((process) => process.status === "triage-completed");

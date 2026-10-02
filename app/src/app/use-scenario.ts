@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { HumanDecisionCommand, PortfolioState } from "../domain/model";
+import { OPERATION_SCENARIOS } from "./operation-scenarios";
+
+const LAST_ARRIVAL_TICK = Math.max(...OPERATION_SCENARIOS.map((scenario) => scenario.arrivalTick));
 import {
   currentExecutionEvents,
   recordWorkflow,
@@ -49,7 +52,8 @@ export function useScenario() {
   useEffect(() => {
     if (
       portfolio.activeProcesses.length === 0 &&
-      portfolio.queuedProcesses.length === 0
+      portfolio.queuedProcesses.length === 0 &&
+      state.tick >= LAST_ARRIVAL_TICK
     )
       return;
 
@@ -108,7 +112,8 @@ export function useScenario() {
     projection,
     playing:
       portfolio.activeProcesses.length > 0 ||
-      portfolio.queuedProcesses.length > 0,
+      portfolio.queuedProcesses.length > 0 ||
+      state.tick < LAST_ARRIVAL_TICK,
     selectProcess,
     pinProcess,
     releaseProcess,

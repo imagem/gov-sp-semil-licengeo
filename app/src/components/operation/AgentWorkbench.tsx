@@ -52,7 +52,7 @@ export function AgentWorkbench({ projection, portfolio, selectedStage, onSelectS
       {process ? <details className="orchestration-ownership"><summary>Responsáveis e câmara · {process.recommendation?.chamber ?? "encaminhamento pendente"}</summary><ProcessOwnership process={process} portfolio={portfolio} /></details> : null}
       <div className="agent-workbench__top">
         <div className="agent-flow" aria-label="Fluxo vertical das seis fases">
-          <p className="agent-flow__legend">6 fases da triagem · 20 especialistas digitais em 4 áreas</p>
+          <p className="agent-flow__legend">Fases da triagem</p>
           {AGENTS.map((agent) => {
             const complete = projection.completedStages.includes(agent.stage);
             const active = process?.status === "in-analysis" && projection.currentStage === agent.stage && !complete;
@@ -68,9 +68,8 @@ export function AgentWorkbench({ projection, portfolio, selectedStage, onSelectS
                   {complete ? <Check /> : active ? <SpinnerGap /> : <Circle />}
                 </span>
                 <span className="agent-node__copy">
-                  <small>Fase {agent.number}</small>
                   <strong>{agent.shortName}</strong>
-                  <span>{complete ? "Concluído" : active ? "Em execução" : "Aguardando"}</span>
+                  <span>{complete ? "Concluído" : active ? "Em curso" : "Aguardando"}</span>
                 </span>
               </button>
             );

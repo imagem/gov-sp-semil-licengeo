@@ -23,7 +23,9 @@ export function pendingExplanation(
     ruleCode: rule?.code ?? reviewRule?.code ?? "Aguardando registro",
     ruleTitle: rule?.title ?? reviewRule?.title ?? "Aguardando registro",
     evidence: evidence ? `${evidence.title}: ${evidence.measure}. ${evidence.detail}` : "Aguardando registro",
-    reason: requested && evidence?.kind === "spatial-overlap"
+    reason: requested && process.scenario.focusLayer === "none" && process.scenario.conflict === null && process.scenario.recommendation.score < 35
+      ? "As camadas exibidas não indicam sobreposição. A revisão humana de rotina confere a documentação antes do encaminhamento."
+      : requested && evidence?.kind === "spatial-overlap"
       ? "O cruzamento gerou um alerta de triagem para revisão técnica. A interseção, isoladamente, não comprova irregularidade."
       : requested && evidence
         ? "A evidência registrada gerou uma pendência de triagem. O analista deve conferir a fonte e a documentação antes de decidir."
@@ -65,7 +67,7 @@ export function processTraceSteps(
   const decision = [...events].reverse().find((event) => event.kind === "human-decision-recorded");
   return [
     { label: "Polígono", value: `${process.scenario.id} · ${process.scenario.municipality}`, eventKind: "process-received" as const },
-    { label: "Alerta territorial", value: explanation.evidence === "Aguardando registro" ? "Ainda não registrado" : explanation.evidence, eventKind: "evidence-recorded" as const },
+    { label: "Evidência registrada", value: explanation.evidence === "Aguardando registro" ? "Ainda não registrado" : explanation.evidence, eventKind: "evidence-recorded" as const },
     { label: "Fase produtora", value: explanation.producer === "Aguardando registro" ? "Ainda não registrado" : explanation.producer, eventKind: "stage-completed" as const },
     { label: "Regra e agente", value: explanation.ruleCode === "Aguardando registro" ? "Ainda não registrado" : `${explanation.ruleCode} · ${explanation.ruleTitle}${explanation.specialists.length ? ` · ${explanation.specialists.map((item) => `${item.id} ${item.name}`).join("; ")}` : " · Sem especialista convocado"}`, eventKind: explanation.specialists.length ? "specialist-requested" as const : "human-decision-requested" as const },
     { label: "Recomendação", value: recommendation?.kind === "recommendation-created" ? recommendation.recommendation.route : "Ainda não registrado", eventKind: "recommendation-created" as const },

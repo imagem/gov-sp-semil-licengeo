@@ -23,7 +23,7 @@ import { OPERATION_SCENARIOS } from "../../app/operation-scenarios";
 import type { AgentStage, EnvironmentalLayerId, OperationScenario, ProcessExecutionProjection } from "../../domain/model";
 import { pendingMarkerSpecs } from "./pending-markers";
 import { PendingMapPopup } from "./PendingMapPopup";
-import { EVIDENCE_ALERT_COLOR, EVIDENCE_CLEAR_COLOR, pendingMapLegend, PROCESS_HIGH_COLOR, PROCESS_LOW_COLOR } from "./map-analysis-legend";
+import { EVIDENCE_ALERT_COLOR, pendingMapLegend, PROCESS_HIGH_COLOR, PROCESS_LOW_COLOR } from "./map-analysis-legend";
 
 type LayerId = Exclude<EnvironmentalLayerId, "none"> | "processes";
 export type MapFocus = "overview" | "process" | LayerId;
@@ -93,6 +93,7 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
   const pendingIdsRef = useRef(new Set(pendingProcesses.map((process) => process.scenario.id)));
   const selectPendingRef = useRef(onSelectPending);
   const previousScenarioId = useRef<string | null>(null);
+  const navigationRequest = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [catalogTab, setCatalogTab] = useState<"layers" | "basemaps">("layers");
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
@@ -100,6 +101,8 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
   const [featureCounts, setFeatureCounts] = useState<Partial<Record<LayerId, number>>>({ processes: OPERATION_SCENARIOS.length });
   const popupProcess = pendingProcesses.find((process) => process.scenario.id === popupProcessId);
   const popupFocusLayer = LAYERS.find((layer) => layer.id === popupProcess?.scenario.focusLayer);
+  const mappedScenario = popupProcess?.scenario ?? scenario;
+  const mappedEvidenceVisible = mappedScenario.focusLayer !== "none" && mappedScenario.evidence.some((item) => item.kind === "spatial-overlap");
   pendingIdsRef.current = new Set(pendingProcesses.map((process) => process.scenario.id));
   selectPendingRef.current = onSelectPending;
 
@@ -166,27 +169,31 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
 
     registry.activeProcess.removeAll();
     registry.evidence.removeAll();
-    const polygon = polygonFromScenario(scenario);
-    registry.activeProcess.addMany(createActiveProcessGraphics(scenario, polygon));
+    const polygon = polygonFromScenario(mappedScenario);
+    registry.activeProcess.addMany(createActiveProcessGraphics(mappedScenario, polygon));
 
-    if (scenario.focusLayer !== "none") {
-      registry[scenario.focusLayer].visible = true;
-      setVisibility((current) => ({ ...current, [scenario.focusLayer]: true }));
+    if (mappedScenario.focusLayer !== "none") {
+      registry[mappedScenario.focusLayer].visible = true;
+      setVisibility((current) => ({ ...current, [mappedScenario.focusLayer]: true }));
     }
 
-    if (stageReached(stage, "territorial-analysis")) {
-      registry.evidence.add(createEvidenceGraphic(scenario, polygon));
+    if (mappedEvidenceVisible && (popupProcess || stageReached(stage, "territorial-analysis"))) {
+      registry.evidence.add(createEvidenceGraphic(mappedScenario, polygon));
     }
 
-    if (previousScenarioId.current !== scenario.id) {
-      previousScenarioId.current = scenario.id;
-      void view.goTo(
-        { center: [...scenario.center], zoom: scenario.mapZoom },
-        { duration: pinnedProcessId || prefersReducedMotion() ? 0 : 1400 },
-      ).catch(() => undefined);
+    if (previousScenarioId.current !== mappedScenario.id) {
+      previousScenarioId.current = mappedScenario.id;
+      const request = ++navigationRequest.current;
+      void view.when().then(() => {
+        if (viewRef.current !== view || navigationRequest.current !== request) return;
+        return view.goTo(
+          { center: [...mappedScenario.center], zoom: mappedScenario.mapZoom },
+          { duration: popupProcess || pinnedProcessId || prefersReducedMotion() ? 0 : 1400 },
+        );
+      }).catch(() => undefined);
     }
     syncMapOverlays(view, containerRef.current?.parentElement ?? null);
-  }, [scenario, stage]);
+  }, [mappedScenario, mappedEvidenceVisible, popupProcess, stage]);
 
   useEffect(() => {
     if (viewRef.current) syncMapOverlays(viewRef.current, containerRef.current?.parentElement ?? null);
@@ -197,7 +204,7 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
     const registry = layersRef.current;
     if (!view || !registry) return;
 
-    if (pinnedProcessId) return;
+    if (pinnedProcessId || popupProcess) return;
     let cancelled = false;
 
     if (focus === "overview") {
@@ -219,13 +226,13 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
       }
     });
     return () => { cancelled = true; };
-  }, [focus, scenario, pinnedProcessId]);
+  }, [focus, scenario, pinnedProcessId, popupProcess]);
 
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || pinnedProcessId !== scenario.id) return;
+    if (!view || popupProcess || pinnedProcessId !== scenario.id) return;
     void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: 0 }).catch(() => undefined);
-  }, [pinnedProcessId, scenario]);
+  }, [pinnedProcessId, popupProcess, scenario]);
 
   function toggleLayer(id: LayerId) {
     const layer = layersRef.current?.[id];
@@ -243,11 +250,10 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
   }
 
   return (
-    <div className="map-region" aria-label="Mapa do processo e das evidências territoriais" data-process-id={scenario.id}>
+    <div className="map-region" aria-label="Mapa do processo e das evidências territoriais" data-process-id={mappedScenario.id}>
       <div className="map-view" ref={containerRef} />
-      <svg className="map-process-overlay" aria-hidden="true"><polygon data-process-outline={scenario.id} data-coordinates={JSON.stringify(scenario.polygon)} /></svg>
       <div className="map-pending-overlays">{pendingMarkerSpecs(pendingProcesses).map((marker) => <button type="button" className="map-pending-marker" data-longitude={marker.center[0]} data-latitude={marker.center[1]} key={marker.id} title={`${marker.id}: ${marker.label}`} aria-label={`Abrir ${marker.label}`} onClick={() => onSelectPending(marker.id)}>!</button>)}</div>
-      {popupProcess ? createPortal(<PendingMapPopup process={popupProcess} legend={pendingMapLegend(popupProcess.scenario, popupFocusLayer, popupFocusLayer ? visibility[popupFocusLayer.id] : false)} onClose={onClosePopup} />, document.querySelector(".app") ?? document.body) : null}
+      {popupProcess ? createPortal(<PendingMapPopup process={popupProcess} legend={pendingMapLegend(popupProcess.scenario, popupFocusLayer, popupFocusLayer ? visibility[popupFocusLayer.id] : false, mappedEvidenceVisible)} onClose={onClosePopup} />, document.querySelector(".app") ?? document.body) : null}
       {error ? <div className="map-error" role="alert">{error}</div> : null}
       <div className="map-tools" aria-label="Ferramentas do mapa">
         <button type="button" aria-label="Visão estadual" onClick={() => moveHome(viewRef.current)}><House /></button>
@@ -276,16 +282,18 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
             <div className="map-catalog__body">
               <LayerGroup title="Processos" open>
                 <LayerToggle definition={PROCESS_LAYER} visible={visibility.processes} count={featureCounts.processes} onToggle={toggleLayer} />
-                <div className="map-catalog__legend" aria-label="Legenda de complexidade">
-                  <span><i className="tone-low" /> Baixa</span><span><i className="tone-medium" /> Média</span><span><i className="tone-high" /> Alta</span>
+                <div className="map-catalog__legend" aria-label="Legenda dos polígonos de processos">
+                  <span><i style={{ background: "#7257ff" }} /> Catálogo</span><span><i style={{ background: "#dc2626" }} /> Processo em foco, score ≥ 35</span><span><i style={{ background: "#10b981" }} /> Processo em foco, score &lt; 35</span>
                 </div>
               </LayerGroup>
               <LayerGroup title="Camadas ambientais e territoriais" open>
                 {LAYERS.slice(1).map((definition) => <LayerToggle key={definition.id} definition={definition} visible={visibility[definition.id]} count={featureCounts[definition.id]} onToggle={toggleLayer} />)}
               </LayerGroup>
-              <LayerGroup title="Análise" open>
-                <div className="map-catalog__analysis"><i /> Processo em foco e evidências produzidas</div>
-              </LayerGroup>
+              {mappedEvidenceVisible && (popupProcess || stageReached(stage, "territorial-analysis")) ? (
+                <LayerGroup title="Análise" open>
+                  <div className="map-catalog__analysis"><i /> Entorno ilustrativo da análise territorial</div>
+                </LayerGroup>
+              ) : null}
             </div>
           ) : (
             <div className="basemap-grid">
@@ -371,15 +379,14 @@ function createActiveProcessGraphics(scenario: OperationScenario, polygon: Polyg
 }
 
 function createEvidenceGraphic(scenario: OperationScenario, polygon: Polygon): Graphic {
-  const clear = scenario.focusLayer === "none";
-  const color = clear ? EVIDENCE_CLEAR_COLOR : EVIDENCE_ALERT_COLOR;
+  const color = EVIDENCE_ALERT_COLOR;
   return new Graphic({
     geometry: extentOrPolygon(polygon, 1.6),
     attributes: { process: scenario.id, result: scenario.focusLayerLabel },
     symbol: {
       type: "simple-fill",
-      color: [...color, clear ? 0.04 : 0.08],
-      outline: { color: [...color, clear ? 0.9 : 0.95], width: 2, style: "dash" },
+      color: [...color, 0.08],
+      outline: { color: [...color, 0.95], width: 2, style: "dash" },
     },
   });
 }
@@ -391,15 +398,6 @@ function polygonFromScenario(scenario: OperationScenario): Polygon {
 
 function syncMapOverlays(view: MapView, container: HTMLElement | null) {
   if (!container || !view.ready) return;
-  const outline = container.querySelector<SVGPolygonElement>("[data-process-outline]");
-  if (outline) {
-    const coordinates = JSON.parse(outline.dataset.coordinates ?? "[]") as [number, number][];
-    const points = coordinates.map(([longitude, latitude]) => {
-      const screen = view.toScreen(new Point({ longitude, latitude, spatialReference: { wkid: 4326 } }));
-      return screen ? `${screen.x},${screen.y}` : "";
-    }).filter(Boolean);
-    outline.setAttribute("points", points.join(" "));
-  }
   container.querySelectorAll<HTMLElement>(".map-pending-marker").forEach((marker) => {
     const longitude = Number(marker.dataset.longitude);
     const latitude = Number(marker.dataset.latitude);
