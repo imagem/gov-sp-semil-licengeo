@@ -17,6 +17,7 @@ import { SPECIALISTS } from "../../app/specialists";
 import type { AgentStage, OperationProjection, PortfolioEvent, PortfolioProjection } from "../../domain/model";
 import { PanelFrame } from "../shell/PanelFrame";
 import { ProcessOwnership } from "./ProcessOwnership";
+import { eventAttribution } from "../../app/pending-trace";
 
 interface AgentWorkbenchProps {
   readonly projection: OperationProjection;
@@ -51,6 +52,7 @@ export function AgentWorkbench({ projection, portfolio, selectedStage, onSelectS
       {process ? <details className="orchestration-ownership"><summary>Responsáveis e câmara · {process.recommendation?.chamber ?? "encaminhamento pendente"}</summary><ProcessOwnership process={process} portfolio={portfolio} /></details> : null}
       <div className="agent-workbench__top">
         <div className="agent-flow" aria-label="Fluxo vertical das seis fases">
+          <p className="agent-flow__legend">6 fases da triagem · 20 especialistas digitais em 4 áreas</p>
           {AGENTS.map((agent) => {
             const complete = projection.completedStages.includes(agent.stage);
             const active = process?.status === "in-analysis" && projection.currentStage === agent.stage && !complete;
@@ -125,7 +127,7 @@ export function AgentWorkbench({ projection, portfolio, selectedStage, onSelectS
           ) : workflowEvents.slice().reverse().map((event, index) => (
             <div className="event-row" key={`${event.occurredAt}-${event.kind}-${index}`}>
               <time>{formatTime(event.occurredAt)}</time>
-              <span>{eventSummary(event)}</span>
+              <span>{eventSummary(event)}<small className="event-row__author">{eventAttribution(event, SPECIALISTS)}{event.kind === "specialist-requested" ? ` · Gatilho: ${event.trigger}` : ""}</small></span>
               <strong>{eventResult(event)}</strong>
             </div>
           ))}

@@ -139,6 +139,16 @@ export default function App() {
 
   function selectPendingProcess(processId: string) {
     setSelectedPendingProcessId(processId);
+    scenario.pinProcess(processId);
+  }
+
+  function releasePendingFocus() {
+    setSelectedPendingProcessId(null);
+    scenario.releaseProcess();
+  }
+
+  function selectWorkbenchProcess(processId: string) {
+    setSelectedPendingProcessId(pendingProcesses.some((process) => process.scenario.id === processId) ? processId : null);
     scenario.selectProcess(processId);
   }
 
@@ -165,7 +175,7 @@ export default function App() {
       <Sidebar active={activeNavigation} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} onNavigate={setActiveNavigation} />
 
       {activeNavigation === "operation" ? <main className="operation-page">
-        <OperationMap focus={mapFocus} scenario={scenario.projection.scenario} stage={scenario.projection.currentStage} catalogOpen={catalogOpen} onCatalogChange={(open) => { setCatalogOpen(open); if (open) setPanels((current) => ({ ...current, agents: false })); }} />
+        <OperationMap focus={mapFocus} scenario={scenario.projection.scenario} stage={scenario.projection.currentStage} pinnedProcessId={scenario.pinnedProcessId} pendingProcesses={pendingProcesses} catalogOpen={catalogOpen} onCatalogChange={(open) => { setCatalogOpen(open); if (open) setPanels((current) => ({ ...current, agents: false })); }} />
         <div className={focusMode ? "operation-overlay operation-overlay--focus" : "operation-overlay"}>
           <ScenarioToolbar
             projection={scenario.projection}
@@ -192,6 +202,8 @@ export default function App() {
             onOpenProcesses={() => setActiveNavigation("processes")}
             onSelectProcess={selectPendingProcess}
             selectedPendingProcessId={selectedPendingProcessId}
+            pinnedProcessId={scenario.pinnedProcessId}
+            onReleaseFocus={releasePendingFocus}
           /> : null}
           {panels.rules ? <RulesPanel
             collapsed={false}
@@ -217,7 +229,7 @@ export default function App() {
             portfolio={scenario.portfolio}
             selectedStage={selectedStage}
             onSelectStage={setSelectedStage}
-            onSelectProcess={scenario.selectProcess}
+            onSelectProcess={selectWorkbenchProcess}
             onToggle={() => togglePanel("agents")}
           /> : null}
         </div>
@@ -255,6 +267,7 @@ export default function App() {
       <DossierDialog
         open={dossierOpen}
         projection={scenario.projection}
+        process={scenario.portfolio.processes.find((process) => process.scenario.id === scenario.projection.scenario.id)}
         onClose={() => setDossierOpen(false)}
         onIssue={scenario.emitDossier}
       />

@@ -2,16 +2,22 @@ import { CheckCircle, DownloadSimple, X } from "@phosphor-icons/react";
 import { useEffect, useRef } from "react";
 
 import type { OperationProjection } from "../../domain/model";
+import type { ProcessExecutionProjection } from "../../domain/model";
+import { pendingExplanation } from "../../app/pending-trace";
+import { EXPLANATION_RULES } from "../../app/operation-data";
+import { SPECIALISTS } from "../../app/specialists";
 
 interface DossierDialogProps {
   readonly open: boolean;
   readonly projection: OperationProjection;
+  readonly process: ProcessExecutionProjection | undefined;
   readonly onClose: () => void;
   readonly onIssue: () => void;
 }
 
-export function DossierDialog({ open, projection, onClose, onIssue }: DossierDialogProps) {
+export function DossierDialog({ open, projection, process, onClose, onIssue }: DossierDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const explanation = process ? pendingExplanation(process, EXPLANATION_RULES, SPECIALISTS) : null;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -58,6 +64,15 @@ export function DossierDialog({ open, projection, onClose, onIssue }: DossierDia
             Recomenda-se {projection.scenario.recommendation.route.toLowerCase()} pela {projection.scenario.recommendation.chamber}. A decisão final permanece sob responsabilidade da equipe técnica.
           </p>
         </section>
+
+        {explanation ? <section className="dossier-copy">
+          <h3>Trilha da recomendação</h3>
+          <p><strong>Fase produtora:</strong> {explanation.producer}</p>
+          <p><strong>Regra demonstrativa:</strong> {explanation.ruleCode} · {explanation.ruleTitle}</p>
+          <p><strong>Evidência:</strong> {explanation.evidence}</p>
+          {explanation.specialists.map((item) => <p key={item.id}><strong>{item.id} · {item.name}:</strong> convocado por {item.trigger}. Resultado: {item.result}.</p>)}
+          <p><strong>Decisão humana:</strong> {projection.humanDecision ? `${projection.humanDecision.author}: ${projection.humanDecision.justification}` : "Aguardando registro"}</p>
+        </section> : null}
 
         <footer>
           <span>Ambiente demonstrativo · dados simulados</span>

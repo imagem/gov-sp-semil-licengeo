@@ -2,6 +2,7 @@ import { OPERATION_SCENARIOS } from "../app/operation-scenarios";
 import { SPECIALISTS } from "../app/specialists";
 import { currentExecutionEvents, recordWorkflow, workflowFor } from "./workflow";
 import { recommendationWithPublishedRules } from "./rule-comparison";
+import { resolvePortfolioSelection } from "./focus-selection";
 import type {
   AgentStage,
   BranchProjection,
@@ -48,6 +49,7 @@ export function createPortfolio(): PortfolioState {
     tick: 0,
     clock: PRESENTATION_START,
     selectedProcessId: null,
+    pinnedProcessId: null,
     events: [],
   };
 }
@@ -58,6 +60,16 @@ export function selectPortfolioProcess(
 ): PortfolioState {
   const processExists = OPERATION_SCENARIOS.some((scenario) => scenario.id === processId);
   return processExists ? { ...state, selectedProcessId: processId } : state;
+}
+
+export function pinPortfolioProcess(state: PortfolioState, processId: string): PortfolioState {
+  return OPERATION_SCENARIOS.some((scenario) => scenario.id === processId)
+    ? { ...state, selectedProcessId: processId, pinnedProcessId: processId }
+    : state;
+}
+
+export function releasePortfolioProcess(state: PortfolioState): PortfolioState {
+  return { ...state, pinnedProcessId: null };
 }
 
 export function recordPortfolioHumanDecision(
@@ -157,21 +169,22 @@ export function advancePortfolio(state: PortfolioState): PortfolioState {
     tick,
     clock: occurredAt,
     selectedProcessId: state.selectedProcessId,
+    pinnedProcessId: state.pinnedProcessId,
     events,
   });
-  const selectedStillActive = nextProjection.activeProcesses.some(
-    (process) => process.scenario.id === state.selectedProcessId,
+  const selectedProcessId = resolvePortfolioSelection(
+    state.pinnedProcessId,
+    state.selectedProcessId,
+    nextProjection.activeProcesses.map((process) => process.scenario.id),
+    firstArrival?.scenario.id ?? null,
+    nextProjection.processes.map((process) => process.scenario.id),
   );
-  const selectedProcessId = state.selectedProcessId === null
-    ? firstArrival?.scenario.id ?? null
-    : selectedStillActive
-      ? state.selectedProcessId
-      : nextProjection.activeProcesses[0]?.scenario.id ?? state.selectedProcessId;
 
   return {
     tick,
     clock: occurredAt,
     selectedProcessId,
+    pinnedProcessId: state.pinnedProcessId && nextProjection.processes.some((process) => process.scenario.id === state.pinnedProcessId) ? state.pinnedProcessId : null,
     events,
   };
 }
@@ -186,6 +199,7 @@ export function projectPortfolio(state: PortfolioState): PortfolioProjection {
     tick: state.tick,
     clock: state.clock,
     selectedProcessId: state.selectedProcessId,
+    pinnedProcessId: state.pinnedProcessId,
     processes,
     queuedProcesses,
     activeProcesses,
@@ -452,6 +466,7 @@ function requestBranchesForActiveStages({
         mode: branch.mode,
         durationTicks: branch.durationTicks,
         title: branch.title,
+        trigger: branch.trigger === branch.title ? `${scenario.focusLayerLabel}: ${branch.title}` : branch.trigger,
         tick,
         occurredAt,
       });

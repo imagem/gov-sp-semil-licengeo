@@ -66,6 +66,7 @@ export function SpecialistNetwork({ portfolio, query }: SpecialistNetworkProps) 
 
   return (
     <section className="specialist-network" aria-label="Grafo de especialidades em tempo real">
+      <div className="specialist-department-legend" aria-label="Quatro áreas dos vinte especialistas digitais">20 especialistas digitais em 4 áreas: {DEPARTMENTS.map((item) => <span className={`department-tone department-tone--${item.id}`} key={item.id}>{item.label}</span>)}</div>
       <div className="specialist-network__toolbar">
         <label>
           <span>Departamento</span>
@@ -95,7 +96,7 @@ export function SpecialistNetwork({ portfolio, query }: SpecialistNetworkProps) 
           <div className="specialist-graph__departments">
             {DEPARTMENTS.filter((item) => department === "all" || item.id === department).map((item) => {
               const loads = visibleSpecialists.filter((load) => load.specialist.department === item.id);
-              return <section className="specialist-department" key={item.id} aria-labelledby={`department-${item.id}`}>
+              return <section className="specialist-department" data-department={item.id} key={item.id} aria-labelledby={`department-${item.id}`}>
                 <header id={`department-${item.id}`}><strong>{item.label}</strong><span>{loads.length}</span></header>
                 <div>
                   {loads.map((load) => <SpecialistNode load={load} selected={load.specialist.id === selected.specialist.id} liveMode={liveMode} onSelect={() => { setSelectedId(load.specialist.id); setInspectorMode("overview"); }} key={load.specialist.id} />)}

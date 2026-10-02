@@ -140,8 +140,8 @@ export const OPERATION_SCENARIOS = [
     },
     arrivalTick: 5,
     branches: [
-      branch("BR-0514-UCUS", "ESP-07", "territorial-analysis", "blocking", 3, "Análise da APA e amortecimento", "Interferência de baixa extensão confirmada."),
-      branch("BR-0514-BIO", "ESP-11", "territorial-analysis", "consultative", 4, "Consulta de conectividade", "Condicionante de conectividade sugerida."),
+      branch("BR-0514-UCUS", "ESP-07", "territorial-analysis", "blocking", 3, "Análise da APA e amortecimento", "Interferência de baixa extensão confirmada.", "Interseção de 0,36 ha com a APA Itupararanga"),
+      branch("BR-0514-BIO", "ESP-11", "territorial-analysis", "consultative", 4, "Consulta de conectividade", "Condicionante de conectividade sugerida.", "Interseção com UC de Uso Sustentável pede consulta de conectividade"),
     ],
     stageSummaries: stageSummaries("APA Itupararanga consultada", "Score 31 e revisão orientada", "Câmara de Biodiversidade"),
   },
@@ -486,8 +486,9 @@ function branch(
   durationTicks: number,
   title: string,
   result: string,
+  trigger: string = title,
 ): OperationScenario["branches"][number] {
-  return { id, specialistId, originStage, mode, durationTicks, title, result };
+  return { id, specialistId, originStage, mode, durationTicks, title, result, trigger };
 }
 
 function spatialEvidence(

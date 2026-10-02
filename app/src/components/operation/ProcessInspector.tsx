@@ -7,6 +7,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { PROVENANCE_LABELS } from "../../app/operation-data";
+import { AGENTS } from "../../app/operation-data";
 import type { Evidence, OperationProjection } from "../../domain/model";
 import { PanelFrame } from "../shell/PanelFrame";
 
@@ -50,6 +51,19 @@ export function ProcessInspector({
         <div><dt>Data de entrada</dt><dd>01 set 2026 · 09:14</dd></div>
         <div><dt>Nº do processo</dt><dd>{projection.scenario.id}</dd></div>
       </dl>
+
+      <section className="inspector-section inspector-phases" aria-label="Entradas e saídas das seis fases">
+        <h3>6 fases da triagem: entrada → saída</h3>
+        {AGENTS.map((agent) => {
+          const complete = projection.completedStages.includes(agent.stage);
+          const active = !complete && projection.currentStage === agent.stage;
+          return <div className="inspector-phase" key={agent.stage}>
+            <strong>{agent.number}. {agent.shortName}</strong>
+            <span>{agent.inputs.join(" + ")} → {agent.outputs.join(" + ")}</span>
+            <small>{complete ? `Entregue: ${projection.scenario.stageSummaries[agent.stage]}` : active ? "Em processamento" : "Saída prevista"}</small>
+          </div>;
+        })}
+      </section>
 
       <section className="inspector-section">
         <h3>Evidências</h3>

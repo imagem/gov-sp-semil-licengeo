@@ -3,6 +3,7 @@ import GeoJSONLayer from "@arcgis/core/layers/GeoJSONLayer";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import ArcGISMap from "@arcgis/core/Map";
 import Polygon from "@arcgis/core/geometry/Polygon";
+import Point from "@arcgis/core/geometry/Point";
 import MapView from "@arcgis/core/views/MapView";
 import {
   CaretDown,
@@ -18,7 +19,8 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { OPERATION_SCENARIOS } from "../../app/operation-scenarios";
-import type { AgentStage, EnvironmentalLayerId, OperationScenario } from "../../domain/model";
+import type { AgentStage, EnvironmentalLayerId, OperationScenario, ProcessExecutionProjection } from "../../domain/model";
+import { pendingMarkerSpecs } from "./pending-markers";
 
 type LayerId = Exclude<EnvironmentalLayerId, "none"> | "processes";
 export type MapFocus = "overview" | "process" | LayerId;
@@ -29,6 +31,8 @@ interface OperationMapProps {
   readonly focus: MapFocus;
   readonly scenario: OperationScenario;
   readonly stage: AgentStage;
+  readonly pinnedProcessId: string | null;
+  readonly pendingProcesses: readonly ProcessExecutionProjection[];
 }
 
 interface LayerRegistry {
@@ -75,11 +79,12 @@ const DEFAULT_VISIBILITY: Readonly<Record<LayerId, boolean>> = {
   terrasIndigenas: true,
 };
 
-export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogChange: setCatalogOpen }: OperationMapProps) {
+export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingProcesses, catalogOpen, onCatalogChange: setCatalogOpen }: OperationMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   const mapRef = useRef<ArcGISMap | null>(null);
   const layersRef = useRef<LayerRegistry | null>(null);
+  const previousScenarioId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [catalogTab, setCatalogTab] = useState<"layers" | "basemaps">("layers");
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
@@ -110,6 +115,9 @@ export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogCha
     registry.processes.addMany(createProcessCatalogGraphics());
     registry.app.add(createAppGraphic());
     view.ui.remove("zoom");
+    const extentWatch = view.watch("extent", () => syncMapOverlays(view, container.parentElement));
+    const sizeWatch = view.watch("size", () => syncMapOverlays(view, container.parentElement));
+    void view.when().then(() => syncMapOverlays(view, container.parentElement));
 
     void view.when().then(async () => {
       const [ucPi, ucUs, terrasIndigenas] = await Promise.all([
@@ -126,6 +134,8 @@ export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogCha
       viewRef.current = null;
       mapRef.current = null;
       layersRef.current = null;
+      extentWatch.remove();
+      sizeWatch.remove();
       view.destroy();
     };
   }, []);
@@ -149,16 +159,27 @@ export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogCha
       registry.evidence.add(createEvidenceGraphic(scenario, polygon));
     }
 
-    void view.goTo(
-      { target: extentOrPolygon(polygon, 4), zoom: scenario.mapZoom },
-      { duration: prefersReducedMotion() ? 0 : 1400 },
-    ).catch(() => undefined);
+    if (previousScenarioId.current !== scenario.id) {
+      previousScenarioId.current = scenario.id;
+      void view.goTo(
+        { center: [...scenario.center], zoom: scenario.mapZoom },
+        { duration: pinnedProcessId || prefersReducedMotion() ? 0 : 1400 },
+      ).catch(() => undefined);
+    }
+    syncMapOverlays(view, containerRef.current?.parentElement ?? null);
   }, [scenario, stage]);
+
+  useEffect(() => {
+    if (viewRef.current) syncMapOverlays(viewRef.current, containerRef.current?.parentElement ?? null);
+  }, [pendingProcesses]);
 
   useEffect(() => {
     const view = viewRef.current;
     const registry = layersRef.current;
     if (!view || !registry) return;
+
+    if (pinnedProcessId) return;
+    let cancelled = false;
 
     if (focus === "overview") {
       void view.goTo({ center: [-48.50, -22.60], zoom: 7 }, { duration: prefersReducedMotion() ? 0 : 1000 }).catch(() => undefined);
@@ -166,8 +187,7 @@ export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogCha
     }
 
     if (focus === "process") {
-      const polygon = polygonFromScenario(scenario);
-      void view.goTo({ target: extentOrPolygon(polygon, 4), zoom: scenario.mapZoom }, { duration: prefersReducedMotion() ? 0 : 900 }).catch(() => undefined);
+      void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: prefersReducedMotion() ? 0 : 900 }).catch(() => undefined);
       return;
     }
 
@@ -175,11 +195,18 @@ export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogCha
     layer.visible = true;
     setVisibility((current) => ({ ...current, [focus]: true }));
     void layer.when().then(() => {
-      if (layer.fullExtent) {
+      if (!cancelled && layer.fullExtent) {
         void view.goTo(layer.fullExtent.expand(1.1), { duration: prefersReducedMotion() ? 0 : 1000 }).catch(() => undefined);
       }
     });
-  }, [focus, scenario]);
+    return () => { cancelled = true; };
+  }, [focus, scenario, pinnedProcessId]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || pinnedProcessId !== scenario.id) return;
+    void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: 0 }).catch(() => undefined);
+  }, [pinnedProcessId, scenario]);
 
   function toggleLayer(id: LayerId) {
     const layer = layersRef.current?.[id];
@@ -199,6 +226,9 @@ export function OperationMap({ focus, scenario, stage, catalogOpen, onCatalogCha
   return (
     <div className="map-region" aria-label="Mapa do processo e das evidências territoriais" data-process-id={scenario.id}>
       <div className="map-view" ref={containerRef} />
+      <svg className="map-process-overlay" aria-hidden="true"><polygon data-process-outline={scenario.id} data-coordinates={JSON.stringify(scenario.polygon)} /></svg>
+      <div className="map-pending-overlays" aria-hidden="true">{pendingMarkerSpecs(pendingProcesses).map((marker) => <span className="map-pending-marker" data-longitude={marker.center[0]} data-latitude={marker.center[1]} key={marker.id} title={`${marker.id}: ${marker.label}`}>!</span>)}</div>
+      <ul className="sr-only" aria-label="Pendências no mapa">{pendingMarkerSpecs(pendingProcesses).map((marker) => <li key={marker.id}>{marker.label}</li>)}</ul>
       {error ? <div className="map-error" role="alert">{error}</div> : null}
       <div className="map-tools" aria-label="Ferramentas do mapa">
         <button type="button" aria-label="Visão estadual" onClick={() => moveHome(viewRef.current)}><House /></button>
@@ -359,6 +389,27 @@ function createEvidenceGraphic(scenario: OperationScenario, polygon: Polygon): G
 function polygonFromScenario(scenario: OperationScenario): Polygon {
   const ring = scenario.polygon.map(([longitude, latitude]) => [longitude, latitude]);
   return new Polygon({ rings: [ring], spatialReference: { wkid: 4326 } });
+}
+
+function syncMapOverlays(view: MapView, container: HTMLElement | null) {
+  if (!container || !view.ready) return;
+  const outline = container.querySelector<SVGPolygonElement>("[data-process-outline]");
+  if (outline) {
+    const coordinates = JSON.parse(outline.dataset.coordinates ?? "[]") as [number, number][];
+    const points = coordinates.map(([longitude, latitude]) => {
+      const screen = view.toScreen(new Point({ longitude, latitude, spatialReference: { wkid: 4326 } }));
+      return screen ? `${screen.x},${screen.y}` : "";
+    }).filter(Boolean);
+    outline.setAttribute("points", points.join(" "));
+  }
+  container.querySelectorAll<HTMLElement>(".map-pending-marker").forEach((marker) => {
+    const longitude = Number(marker.dataset.longitude);
+    const latitude = Number(marker.dataset.latitude);
+    const screen = view.toScreen(new Point({ longitude, latitude, spatialReference: { wkid: 4326 } }));
+    if (!screen) return;
+    marker.style.left = `${screen.x}px`;
+    marker.style.top = `${screen.y}px`;
+  });
 }
 
 function extentOrPolygon(polygon: Polygon, factor: number) {

@@ -10,6 +10,7 @@ export interface QueueItem {
 
 export interface TriageRule {
   readonly id: "app" | "ucPi" | "ucUs" | "terrasIndigenas" | "divergence" | "score";
+  readonly code: string;
   readonly title: string;
   readonly layers: string;
   readonly result: string;
@@ -70,6 +71,7 @@ export const QUEUE_ITEMS: readonly QueueItem[] = [
 
 export const DEFAULT_TRIAGE_RULE: TriageRule = {
   id: "app",
+  code: "R-01",
   title: "APP hídrica > 0 ha",
   layers: "Hidrografia + APP 30 m",
   result: "Sobreposição 2,18 ha",
@@ -81,6 +83,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   DEFAULT_TRIAGE_RULE,
   {
     id: "ucPi",
+    code: "R-02",
     title: "Interseção com UC de Proteção Integral",
     layers: "UC estadual, Proteção Integral",
     result: "Restrição e análise aprofundada",
@@ -89,6 +92,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   },
   {
     id: "ucUs",
+    code: "R-03",
     title: "Interseção com UC de Uso Sustentável",
     layers: "UC estadual, Uso Sustentável",
     result: "Alerta e revisão técnica",
@@ -97,6 +101,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   },
   {
     id: "terrasIndigenas",
+    code: "R-04",
     title: "Interseção com Terra Indígena",
     layers: "Terras Indígenas",
     result: "Restrição e análise especializada",
@@ -105,6 +110,7 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   },
   {
     id: "divergence",
+    code: "R-05",
     title: "Divergência imagem > 20%",
     layers: "Declaração + imagem 28 ago",
     result: "Divergência 36%",
@@ -113,12 +119,18 @@ export const TRIAGE_RULES: readonly TriageRule[] = [
   },
   {
     id: "score",
+    code: "R-06",
     title: "Score de complexidade >= 35",
     layers: "Evidências consolidadas",
     result: "Análise aprofundada",
     version: "v2026.08",
     tone: "critical",
   },
+];
+
+export const EXPLANATION_RULES: readonly (Pick<TriageRule, "id" | "code" | "title"> | { readonly id: "humanReview"; readonly code: string; readonly title: string })[] = [
+  ...TRIAGE_RULES,
+  { id: "humanReview", code: "R-HUM", title: "Revisão humana ao fim da triagem" },
 ];
 
 export const DEFAULT_RULE_CONFIGURATIONS = {

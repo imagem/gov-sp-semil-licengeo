@@ -15,12 +15,13 @@ import {
   PHASE_NAMES,
   processLabel,
 } from "../../app/workspace-data";
-import type { ProcessExecutionProjection } from "../../domain/model";
+import type { PortfolioEvent, ProcessExecutionProjection } from "../../domain/model";
 import { useWorkspace } from "./workspace-context";
 import { ProcessOwnership } from "../operation/ProcessOwnership";
 import { DossierMap } from "../map/DossierMap";
 import { DocumentWorkspace } from "./DocumentWorkspace";
 import { AuditWorkspace } from "./AuditWorkspace";
+import { ProcessTrace } from "./ProcessTrace";
 
 export function ProcessWorkspace({
   processes,
@@ -291,6 +292,7 @@ function ProcessDossier({
 }) {
   const api = useWorkspace();
   const [tab, setTab] = useState("overview");
+  const [traceEventKind, setTraceEventKind] = useState<PortfolioEvent["kind"] | undefined>();
   const [evidence, setEvidence] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const work = workflowFor(process);
@@ -326,6 +328,7 @@ function ProcessDossier({
           ["overview", "Visão geral"],
           ["documents", "Documentos"],
           ["territory", "Análise territorial"],
+          ["trace", "Trilha visual"],
           ["routing", "Encaminhamento"],
           ["history", "Histórico"],
         ].map(([id, label]) => (
@@ -340,8 +343,10 @@ function ProcessDossier({
       </div>
       {tab === "documents" ? (
         <DocumentWorkspace processes={[process]} />
+      ) : tab === "trace" ? (
+        <ProcessTrace process={process} onOpenHistory={(kind) => { setTraceEventKind(kind); setTab("history"); }} />
       ) : tab === "history" ? (
-        <AuditWorkspace processes={[process]} />
+        <AuditWorkspace processes={[process]} initialEventKind={traceEventKind} />
       ) : tab === "routing" ? (
         <section className="routing-workspace">
           <ProcessOwnership process={process} portfolio={api.portfolio} />

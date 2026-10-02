@@ -18,6 +18,8 @@ import {
   projectSelectedOperation,
   recordPortfolioHumanDecision,
   selectPortfolioProcess,
+  pinPortfolioProcess,
+  releasePortfolioProcess,
 } from "../domain/portfolio";
 
 export function useScenario() {
@@ -30,8 +32,11 @@ export function useScenario() {
   }, []);
 
   const selectProcess = useCallback((processId: string) => {
-    setState((current) => selectPortfolioProcess(current, processId));
+    setState((current) => current.pinnedProcessId ? pinPortfolioProcess(current, processId) : selectPortfolioProcess(current, processId));
   }, []);
+
+  const pinProcess = useCallback((processId: string) => setState((current) => pinPortfolioProcess(current, processId)), []);
+  const releaseProcess = useCallback(() => setState((current) => releasePortfolioProcess(current)), []);
 
   const decide = useCallback((command: HumanDecisionCommand) => {
     setState((current) => recordPortfolioHumanDecision(current, command));
@@ -105,6 +110,9 @@ export function useScenario() {
       portfolio.activeProcesses.length > 0 ||
       portfolio.queuedProcesses.length > 0,
     selectProcess,
+    pinProcess,
+    releaseProcess,
+    pinnedProcessId: state.pinnedProcessId,
     decide,
     emitDossier,
     act,

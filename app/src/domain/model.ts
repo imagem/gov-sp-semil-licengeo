@@ -162,6 +162,7 @@ export interface BranchRequestTemplate {
   readonly mode: BranchMode;
   readonly durationTicks: number;
   readonly title: string;
+  readonly trigger: string;
   readonly result: string;
 }
 
@@ -269,6 +270,7 @@ export type PortfolioEvent =
       readonly mode: BranchMode;
       readonly durationTicks: number;
       readonly title: string;
+      readonly trigger: string;
       readonly tick: number;
       readonly occurredAt: string;
     }
@@ -352,6 +354,7 @@ export interface PortfolioState {
   readonly tick: number;
   readonly clock: string;
   readonly selectedProcessId: string | null;
+  readonly pinnedProcessId: string | null;
   readonly events: readonly PortfolioEvent[];
 }
 
@@ -395,6 +398,7 @@ export interface PortfolioProjection {
   readonly tick: number;
   readonly clock: string;
   readonly selectedProcessId: string | null;
+  readonly pinnedProcessId: string | null;
   readonly processes: readonly ProcessExecutionProjection[];
   readonly queuedProcesses: readonly ProcessExecutionProjection[];
   readonly activeProcesses: readonly ProcessExecutionProjection[];

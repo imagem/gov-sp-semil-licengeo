@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Clock, X } from "@phosphor-icons/react";
 import type {
   PortfolioEvent,
@@ -6,6 +6,8 @@ import type {
 } from "../../domain/model";
 import { PHASES, PHASE_NAMES, timeLabel } from "../../app/workspace-data";
 import { useWorkspace } from "./workspace-context";
+import { eventAttribution } from "../../app/pending-trace";
+import { SPECIALISTS } from "../../app/specialists";
 
 export function eventTitle(event: PortfolioEvent): string {
   switch (event.kind) {
@@ -66,13 +68,22 @@ function category(event: PortfolioEvent) {
 }
 export function AuditWorkspace({
   processes,
+  initialEventKind,
 }: {
   readonly processes: readonly ProcessExecutionProjection[];
+  readonly initialEventKind?: PortfolioEvent["kind"] | undefined;
 }) {
   const api = useWorkspace();
   const [scope, setScope] = useState("all");
   const [processId, setProcessId] = useState("all");
   const [selectedKey, setSelectedKey] = useState("");
+  const initialProcess = processes[0];
+  useEffect(() => {
+    if (!initialEventKind) return;
+    if (!initialProcess) return;
+    const index = initialProcess.events.findIndex((event) => event.kind === initialEventKind && (event.kind !== "stage-completed" || event.stage === "territorial-analysis"));
+    if (index >= 0) setSelectedKey(initialProcess.scenario.id + "-" + index);
+  }, [initialEventKind, initialProcess?.scenario.id]);
   const rows = processes
     .flatMap((p) =>
       p.events.map((event, index) => ({
@@ -130,13 +141,7 @@ export function AuditWorkspace({
                 <strong>{eventTitle(event)}</strong>
                 <small>
                   {event.processId} ·{" "}
-                  {event.kind === "workflow-action"
-                    ? event.author
-                    : event.kind === "human-decision-recorded"
-                      ? event.decision.author
-                      : event.kind === "dossier-issued"
-                        ? event.dossier.issuedBy
-                        : "Orquestração digital"}
+                  {eventAttribution(event, SPECIALISTS)}
                 </small>
               </span>
               <ArrowRight />
@@ -159,6 +164,8 @@ export function AuditWorkspace({
               </button>
             </header>
             <p>{eventTitle(selected)}</p>
+            <p><strong>Responsável:</strong> {eventAttribution(selected, SPECIALISTS)}</p>
+            {selected.kind === "specialist-requested" ? <p><strong>Gatilho:</strong> {selected.trigger}</p> : null}
             <small>
               {selected.processId} · {timeLabel(selected.occurredAt)}
             </small>
@@ -183,7 +190,7 @@ export function AuditWorkspace({
                 <p>{selected.decision.originalRoute}</p>
                 <h4>Decisão registrada</h4>
                 <p>
-                  {selected.decision.selectedRoute ?? selected.decision.kind}
+                  {selected.decision.selectedRoute ?? ({ "approve-recommendation": "Encaminhamento aprovado", "request-complement": "Complemento solicitado", "change-route": "Encaminhamento alterado" }[selected.decision.kind])}
                 </p>
                 <p>{selected.decision.justification}</p>
               </>
