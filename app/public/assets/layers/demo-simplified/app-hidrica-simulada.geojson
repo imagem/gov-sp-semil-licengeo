@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "name": "APP hídrica simulada",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "app-hidrica-demo-001",
+      "properties": {
+        "id": "app-hidrica-demo-001",
+        "nome": "APP hídrica simulada",
+        "natureza": "geometria sintética para demonstração",
+        "fonte": "LicenGeo SP"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-48.535, -21.513],
+          [-48.465, -21.513],
+          [-48.465, -21.487],
+          [-48.535, -21.487],
+          [-48.535, -21.513]
+        ]]
+      }
+    }
+  ]
+}

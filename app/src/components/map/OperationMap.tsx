@@ -17,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { OPERATION_SCENARIOS } from "../../app/operation-scenarios";
 import type { AgentStage, EnvironmentalLayerId, OperationScenario, ProcessExecutionProjection } from "../../domain/model";
@@ -44,7 +45,7 @@ interface LayerRegistry {
   readonly processes: GraphicsLayer;
   readonly activeProcess: GraphicsLayer;
   readonly evidence: GraphicsLayer;
-  readonly app: GraphicsLayer;
+  readonly app: GeoJSONLayer;
   readonly ucPi: GeoJSONLayer;
   readonly ucUs: GeoJSONLayer;
   readonly terrasIndigenas: GeoJSONLayer;
@@ -61,7 +62,7 @@ const PROCESS_LAYER = { id: "processes", label: "Processos do catálogo", color:
 
 const LAYERS = [
   PROCESS_LAYER,
-  { id: "app", label: "APP hídrica", color: "#2f80ed", supplied: false },
+  { id: "app", label: "APP hídrica simulada", color: "#2f80ed", supplied: false },
   { id: "ucPi", label: "UC estadual, Proteção Integral", color: "#16803c", supplied: true },
   { id: "ucUs", label: "UC estadual, Uso Sustentável", color: "#4f8a3c", supplied: true },
   { id: "terrasIndigenas", label: "Terras Indígenas", color: "#c06b16", supplied: true },
@@ -96,7 +97,7 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
   const [catalogTab, setCatalogTab] = useState<"layers" | "basemaps">("layers");
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
   const [basemap, setBasemap] = useState("hybrid");
-  const [featureCounts, setFeatureCounts] = useState<Partial<Record<LayerId, number>>>({ processes: OPERATION_SCENARIOS.length, app: 1 });
+  const [featureCounts, setFeatureCounts] = useState<Partial<Record<LayerId, number>>>({ processes: OPERATION_SCENARIOS.length });
   const popupProcess = pendingProcesses.find((process) => process.scenario.id === popupProcessId);
   const popupFocusLayer = LAYERS.find((layer) => layer.id === popupProcess?.scenario.focusLayer);
   pendingIdsRef.current = new Set(pendingProcesses.map((process) => process.scenario.id));
@@ -124,7 +125,6 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
     layersRef.current = registry;
     viewRef.current = view;
     registry.processes.addMany(createProcessCatalogGraphics());
-    registry.app.add(createAppGraphic());
     view.ui.remove("zoom");
     const extentWatch = view.watch("extent", () => syncMapOverlays(view, container.parentElement));
     const sizeWatch = view.watch("size", () => syncMapOverlays(view, container.parentElement));
@@ -137,12 +137,13 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
     void view.when().then(() => syncMapOverlays(view, container.parentElement));
 
     void view.when().then(async () => {
-      const [ucPi, ucUs, terrasIndigenas] = await Promise.all([
+      const [app, ucPi, ucUs, terrasIndigenas] = await Promise.all([
+        registry.app.queryFeatureCount(),
         registry.ucPi.queryFeatureCount(),
         registry.ucUs.queryFeatureCount(),
         registry.terrasIndigenas.queryFeatureCount(),
       ]);
-      setFeatureCounts((current) => ({ ...current, ucPi, ucUs, terrasIndigenas }));
+      setFeatureCounts((current) => ({ ...current, app, ucPi, ucUs, terrasIndigenas }));
     }).catch(() => {
       setError("O mapa não pôde carregar todas as camadas. Os dados do processo continuam disponíveis nos painéis.");
     });
@@ -226,28 +227,6 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
     void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: 0 }).catch(() => undefined);
   }, [pinnedProcessId, scenario]);
 
-  useEffect(() => {
-    const view = viewRef.current;
-    const region = containerRef.current?.parentElement;
-    if (!view || !region) return;
-    let cancelled = false;
-    const positionMap = () => {
-      const popup = region.querySelector<HTMLElement>(".pending-map-popup");
-      const left = popup ? Math.ceil(popup.getBoundingClientRect().width + 24) : 0;
-      const right = popup && region.clientWidth > 900 ? Math.min(430, Math.max(0, region.clientWidth - left - 300)) : 0;
-      view.padding = { left, right, top: 0, bottom: 0 };
-      if (popup && popupProcessId === scenario.id) {
-        void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: prefersReducedMotion() ? 0 : 450 }).catch(() => undefined);
-      } else if (!popup && pinnedProcessId === scenario.id) {
-        void view.goTo({ center: [...scenario.center], zoom: scenario.mapZoom }, { duration: 0 }).catch(() => undefined);
-      }
-    };
-    const observer = new ResizeObserver(() => { if (!cancelled) positionMap(); });
-    observer.observe(region);
-    void view.when().then(() => { if (!cancelled) positionMap(); }).catch(() => undefined);
-    return () => { cancelled = true; observer.disconnect(); };
-  }, [popupProcessId, pinnedProcessId, scenario]);
-
   function toggleLayer(id: LayerId) {
     const layer = layersRef.current?.[id];
     if (!layer) return;
@@ -264,11 +243,11 @@ export function OperationMap({ focus, scenario, stage, pinnedProcessId, pendingP
   }
 
   return (
-    <div className={popupProcess ? "map-region map-region--popup" : "map-region"} aria-label="Mapa do processo e das evidências territoriais" data-process-id={scenario.id}>
+    <div className="map-region" aria-label="Mapa do processo e das evidências territoriais" data-process-id={scenario.id}>
       <div className="map-view" ref={containerRef} />
       <svg className="map-process-overlay" aria-hidden="true"><polygon data-process-outline={scenario.id} data-coordinates={JSON.stringify(scenario.polygon)} /></svg>
       <div className="map-pending-overlays">{pendingMarkerSpecs(pendingProcesses).map((marker) => <button type="button" className="map-pending-marker" data-longitude={marker.center[0]} data-latitude={marker.center[1]} key={marker.id} title={`${marker.id}: ${marker.label}`} aria-label={`Abrir ${marker.label}`} onClick={() => onSelectPending(marker.id)}>!</button>)}</div>
-      {popupProcess ? <PendingMapPopup process={popupProcess} legend={pendingMapLegend(popupProcess.scenario, popupFocusLayer, popupFocusLayer ? visibility[popupFocusLayer.id] : false)} onClose={onClosePopup} /> : null}
+      {popupProcess ? createPortal(<PendingMapPopup process={popupProcess} legend={pendingMapLegend(popupProcess.scenario, popupFocusLayer, popupFocusLayer ? visibility[popupFocusLayer.id] : false)} onClose={onClosePopup} />, document.querySelector(".app") ?? document.body) : null}
       {error ? <div className="map-error" role="alert">{error}</div> : null}
       <div className="map-tools" aria-label="Ferramentas do mapa">
         <button type="button" aria-label="Visão estadual" onClick={() => moveHome(viewRef.current)}><House /></button>
@@ -332,7 +311,7 @@ function LayerToggle({ definition, visible, count, onToggle }: { readonly defini
   return (
     <button className={visible ? "layer-toggle" : "layer-toggle layer-toggle--off"} type="button" aria-pressed={visible} onClick={() => onToggle(definition.id)}>
       <i style={{ backgroundColor: definition.color }} />
-      <span><strong>{definition.label}</strong><small>{definition.supplied ? "Camada fornecida" : "Dado sintético"}{count === undefined ? " · carregando" : ` · ${count} feições`}</small></span>
+      <span><strong>{definition.label}</strong><small>{definition.supplied ? "Camada fornecida" : "Dado sintético"}{count === undefined ? " · carregando" : ` · ${count} ${count === 1 ? "feição" : "feições"}`}</small></span>
       {visible ? <Eye aria-label="Visível" /> : <EyeSlash aria-label="Oculta" />}
     </button>
   );
@@ -343,7 +322,7 @@ function createLayerRegistry(): LayerRegistry {
     processes: new GraphicsLayer({ title: "Processos do catálogo", visible: true }),
     activeProcess: new GraphicsLayer({ title: "Processo em foco", visible: true }),
     evidence: new GraphicsLayer({ title: "Evidências da análise", visible: true }),
-    app: new GraphicsLayer({ title: "APP hídrica", visible: true }),
+    app: createGeoJsonLayer("/assets/layers/demo-simplified/app-hidrica-simulada.geojson", "APP hídrica simulada", [47, 128, 237, 0.18], [47, 128, 237, 0.95]),
     ucPi: createGeoJsonLayer("/assets/layers/demo-simplified/uc-protecao-integral.geojson", "UC estadual, Proteção Integral", [22, 128, 61, 0.2], [22, 128, 61, 0.9]),
     ucUs: createGeoJsonLayer("/assets/layers/demo-simplified/uc-uso-sustentavel.geojson", "UC estadual, Uso Sustentável", [79, 138, 60, 0.16], [79, 138, 60, 0.85]),
     terrasIndigenas: createGeoJsonLayer("/assets/layers/demo-simplified/terras-indigenas.geojson", "Terras Indígenas", [192, 107, 22, 0.18], [192, 107, 22, 0.9]),
@@ -371,15 +350,6 @@ function createProcessCatalogGraphics(): Graphic[] {
       attributes: { id: scenario.id, title: scenario.title, municipality: scenario.municipality },
       symbol: { type: "simple-fill", color: [114, 87, 255, 0.08], outline: { color: [114, 87, 255, 0.72], width: 1.2 } },
     })];
-  });
-}
-
-function createAppGraphic(): Graphic {
-  const ring = processRing(-48.50, -21.50, 0.07, 0.026);
-  return new Graphic({
-    geometry: new Polygon({ rings: [ring], spatialReference: { wkid: 4326 } }),
-    attributes: { name: "APP hídrica simulada", source: "Geometria sintética" },
-    symbol: { type: "simple-fill", color: [47, 128, 237, 0.18], outline: { color: [47, 128, 237, 0.95], width: 1.5 } },
   });
 }
 
@@ -442,18 +412,6 @@ function syncMapOverlays(view: MapView, container: HTMLElement | null) {
 
 function extentOrPolygon(polygon: Polygon, factor: number) {
   return polygon.extent?.expand(factor) ?? polygon;
-}
-
-function processRing(longitude: number, latitude: number, width: number, height: number): number[][] {
-  const halfWidth = width / 2;
-  const halfHeight = height / 2;
-  return [
-    [longitude - halfWidth, latitude - halfHeight],
-    [longitude + halfWidth, latitude - halfHeight],
-    [longitude + halfWidth, latitude + halfHeight],
-    [longitude - halfWidth, latitude + halfHeight],
-    [longitude - halfWidth, latitude - halfHeight],
-  ];
 }
 
 function moveHome(view: MapView | null) {

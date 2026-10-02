@@ -178,7 +178,7 @@ export default function App() {
       <Sidebar active={activeNavigation} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((current) => !current)} onNavigate={setActiveNavigation} />
 
       {activeNavigation === "operation" ? <main className="operation-page">
-        <OperationMap focus={mapFocus} scenario={scenario.projection.scenario} stage={scenario.projection.currentStage} pinnedProcessId={scenario.pinnedProcessId} pendingProcesses={pendingProcesses} popupProcessId={popupProcessId} onClosePopup={() => setPopupProcessId(null)} onSelectPending={selectPendingProcess} catalogOpen={catalogOpen} onCatalogChange={(open) => { setCatalogOpen(open); if (open) setPanels((current) => ({ ...current, agents: false })); }} />
+        <OperationMap focus={mapFocus} scenario={scenario.projection.scenario} stage={scenario.projection.currentStage} pinnedProcessId={scenario.pinnedProcessId} pendingProcesses={pendingProcesses} popupProcessId={popupProcessId} onClosePopup={() => setPopupProcessId(null)} onSelectPending={setPopupProcessId} catalogOpen={catalogOpen} onCatalogChange={(open) => { setCatalogOpen(open); if (open) setPanels((current) => ({ ...current, agents: false })); }} />
         <div className={focusMode ? "operation-overlay operation-overlay--focus" : "operation-overlay"}>
           <ScenarioToolbar
             projection={scenario.projection}
